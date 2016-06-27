@@ -72,7 +72,7 @@ void create_group(char *sender, char *gname, group *groups, int *ngroups, user *
     group newGroup;
     strcpy(newGroup.name, gname);
     newGroup.users[0] = senderPos;
-    newGroup.nusers =  newGroup.nusers + 1;
+    newGroup.nusers = 1;
 
     groups[*ngroups] = newGroup;
     *ngroups = *ngroups + 1;
@@ -92,18 +92,45 @@ void create_group(char *sender, char *gname, group *groups, int *ngroups, user *
   }
 }
 
+void join_group(char *sender, char *gname, group *groups, int *ngroups, user *users, int nusers){
+  int senderPos = findUser(users, nusers, sender);
+  int senderSock = users[senderPos].sockfd;
+  int groupPos = findGroup(groups, *ngroups, gname);
+  char msg[100];
+  
+  if(groupPos < 0){
+    sprintf(msg, "Group %s not found.", gname);
+    if(send(senderSock, msg, strlen(msg), 0) < 0){
+      perror("send group error");
+    }
+  }
+  else{
+    if(isInGroup(senderPos, groups[groupPos])){
+      sprintf(msg, "You have already joined %s.", gname);
+      if(send(senderSock, msg, strlen(msg), 0) < 0){
+	perror("send group error");
+      } 
+    }
+    else{
+      groups[groupPos].users[groups[groupPos].nusers] = senderPos;
+      groups[groupPos].nusers = groups[groupPos].nusers + 1;
+      printf("%s, %d\n", groups[groupPos].name, groups[groupPos].nusers);
+      
+      sprintf(msg, "Joined %s!", gname);
+      if(send(senderSock, msg, strlen(msg), 0) < 0){
+	perror("create group error send");
+      }
+    }
+  }
+}
+
 void send_group(char *sender, char *msg, char *gname, group *groups, int *ngroups, user *users, int nusers){
   int senderPos = findUser(users, nusers, sender);
   int senderSock = users[senderPos].sockfd;
   int groupPos = findGroup(groups, *ngroups, gname);
   char buffer[100];
-
   int i;
-  for(i = 0; i < groups[groupPos].nusers; i++){
-    printf("%d ", groups[groupPos].users[i]);
-  }
-  printf("\n");
-  printf("senderPos: %d,isInGroup: %d\n", senderPos, isInGroup(senderPos, groups[groupPos]));
+
   if(groupPos < 0){
     sprintf(buffer, "Group %s not found.", gname);
     if(send(senderSock, buffer, strlen(buffer), 0) < 0){
@@ -112,9 +139,11 @@ void send_group(char *sender, char *msg, char *gname, group *groups, int *ngroup
   }
   else {
     if(isInGroup(senderPos, groups[groupPos])){
-      sprintf(buffer, "Sending to group %s", gname);
-      if(send(senderSock, buffer, strlen(buffer), 0) < 0){
-	perror("send group error");
+      sprintf(buffer, "Sending %s to group %s", msg, gname);
+      for(i = 0; i < groups[groupPos].nusers; i++){
+	if(send(users[groups[groupPos].users[i]].sockfd, msg, strlen(msg), 0) < 0){
+	  perror("send group");
+	}
       }
     }
     else{
@@ -185,7 +214,6 @@ void handleXml(int sockfd, char* recv_buf, char* buffer, fd_set *master, int fdm
 	group = xmlNodeGetContent(cur_node);
       }
     }
-
     create_group(sender, group, groups, ngroups, users, nusers);
   }
   else if(strcmp(xmlGetProp(root, "type"), "SENDG") == 0){
@@ -201,7 +229,18 @@ void handleXml(int sockfd, char* recv_buf, char* buffer, fd_set *master, int fdm
       }
     }
     sprintf(buffer, "[%s->{%s}]: %s", sender, group, msg);
-    send_group(sender, msg, group, groups, ngroups, users, nusers);
+    send_group(sender, buffer, group, groups, ngroups, users, nusers);
+  }
+  else if(strcmp(xmlGetProp(root, "type"), "JOING") == 0){
+    for(cur_node = root->children; cur_node != NULL; cur_node = cur_node->next){
+      if(strcmp(cur_node->name, "from") == 0){
+	sender = xmlNodeGetContent(cur_node);
+      }
+      else if(strcmp(cur_node->name, "group") == 0){
+	group = xmlNodeGetContent(cur_node);
+      }
+    }
+    join_group(sender, group, groups, ngroups, users, nusers);
   }
 
   
