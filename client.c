@@ -14,6 +14,7 @@
 #define PARSE_QUIT 1
 #define PARSE_OK 0
 #define MSG_SIZE 300
+#define NAME_SIZE 15
 
 int parseString(char* msg_buf, char* send_buf){
   char* first;
@@ -76,7 +77,7 @@ int main(int argc, char* argv[])
   if (argc==4) {
     host = argv[1];
     port = atoi(argv[2]);
-    if(strlen(argv[3]) > 15){
+    if(strlen(argv[3]) > NAME_SIZE){
       fprintf(stderr, "User name too long");
       exit(1);
     }
@@ -96,8 +97,6 @@ int main(int argc, char* argv[])
     fprintf(stderr, "unknown host: %s\n", host);
     exit(1);
   }
-  
-  init_interface();
 
   if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
     perror("Socket");
@@ -112,13 +111,20 @@ int main(int argc, char* argv[])
     perror("connect");
     exit(1);
   }
+
+  if(send(sockfd, username, strlen(username), 0) < 0){
+    perror("name send");
+    exit(1);
+  }
   
   FD_ZERO(&master);
   FD_ZERO(&read_fds);
   FD_SET(0, &master);
   FD_SET(sockfd, &master);
   fdmax = sockfd;
-	
+
+  init_interface();
+  
   while(1){
     read_fds = master;
     if(select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1){

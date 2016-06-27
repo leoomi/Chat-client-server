@@ -9,8 +9,10 @@
 #include <netdb.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
+#include "user.h"
 
 #define BUFSIZE 1024
+#define MAX_USERS 30
 
 //parses xml message
 void parseXml(char* recv_buf, char* buffer){
@@ -56,9 +58,9 @@ void send_to_all(int j, int sockfd, int nbytes_recvd, char *send_buf, fd_set *ma
   }
 }
 
-void send_recv(int i, fd_set *master, int sockfd, int fdmax)
+void send_recv(int i, fd_set *master, int sockfd, int fdmax, user* users, int nusers)
 {
-  int nbytes_recvd, j;
+  int nbytes_recvd, j, userpos;
   char recv_buf[BUFSIZE];
   char send_buf[BUFSIZE];
 	
@@ -71,10 +73,12 @@ void send_recv(int i, fd_set *master, int sockfd, int fdmax)
     }
     close(i);
     FD_CLR(i, master);
+    userpos = findSockfd(users, nusers, i);
+    users[userpos].sockfd = -1;
   }
   else {
     recv_buf[nbytes_recvd] = '\0';
-    //printf("%s\n", recv_buf);
+    printf("%s\n", recv_buf);
     parseXml(recv_buf, send_buf);
     for(j = 0; j <= fdmax; j++){
       send_to_all(j, sockfd, nbytes_recvd, send_buf, master);
@@ -83,10 +87,11 @@ void send_recv(int i, fd_set *master, int sockfd, int fdmax)
 }
 
 //Handles new connections
-void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_in *client_addr)
+void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_in *client_addr, user *users, int *nusers)
 {
   socklen_t addrlen;
-  int newsockfd;
+  int newsockfd, len, userpos;
+  char name[NAME_SIZE];
 	
   addrlen = sizeof(struct sockaddr_in);
   if((newsockfd = accept(sockfd, (struct sockaddr *)client_addr, &addrlen)) < 0) {
@@ -94,11 +99,28 @@ void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_i
     exit(1);
   }
   else {
-    FD_SET(newsockfd, master);
-    if(newsockfd > *fdmax){
-      *fdmax = newsockfd;
+    if(len = recv(newsockfd, name, NAME_SIZE, 0) < 0){
+      perror("name recv");
+      close(newsockfd);
     }
-    printf("new connection from %s on port %d \n",inet_ntoa(client_addr->sin_addr), ntohs(client_addr->sin_port));
+    else{
+      FD_SET(newsockfd, master);
+      if(newsockfd > *fdmax){
+	*fdmax = newsockfd;
+      }
+      printf("new connection from %s:%d, user: %s\n",inet_ntoa(client_addr->sin_addr), ntohs(client_addr->sin_port), name);
+
+      if(userpos = findUser(users, *nusers, name) < 0){
+	user newUser;
+	newUser.sockfd = newsockfd;
+	strcpy(newUser.name, name);
+	users[*nusers] = newUser;
+	*nusers++;
+      }
+      else{
+	users[userpos].sockfd = newsockfd;
+      }
+    }
   }
 }
 
@@ -140,6 +162,8 @@ int main(int argc, char* argv[]) {
   int fdmax, i, port;
   int sockfd = 0;
   struct sockaddr_in my_addr, client_addr;
+  user users[MAX_USERS];
+  int nusers = 0;
 
   if (argc == 2) {
     port = atoi(argv[1]);
@@ -166,9 +190,9 @@ int main(int argc, char* argv[]) {
     for (i = 0; i <= fdmax; i++){
       if (FD_ISSET(i, &read_fds)){
 	if (i == sockfd)
-	  connection_accept(&master, &fdmax, sockfd, &client_addr);
+	  connection_accept(&master, &fdmax, sockfd, &client_addr, users, &nusers);
 	else
-	  send_recv(i, &master, sockfd, fdmax);
+	  send_recv(i, &master, sockfd, fdmax, users, nusers);
       }
     }
   }
