@@ -15,17 +15,33 @@
 #define PARSE_OK 0
 #define MSG_SIZE 300
 
+void delchar(char *x,int a, int b)
+{
+  if ((a+b-1) <= strlen(x))
+    {
+      strcpy(&x[b-1],&x[a+b-1]);
+      puts(x);
+    }
+}
+
 int parseString(char* msg_buf, char* send_buf){
   char* first;
+  char msg[MSG_SIZE];
+  strcpy(msg, msg_buf);
+  
   first = strtok(msg_buf, " ");
   if(strcmp(first, "SEND") == 0){
-    char *recipient, *msg;
+    char *recipient;
     recipient = strtok(NULL, " ");
-    msg = strtok(NULL, " ");
-    xmlSend(send_buf, msg, recipient);
+    
+    xmlSend(send_buf, msg+6+strlen(recipient), recipient);
     return PARSE_OK;
   }
-  else if(strcmp(first, "QUIT") == 0){
+  else if(strcmp(first, "SENDALL") == 0){
+    xmlSendAll(send_buf, msg+8);
+    return PARSE_OK;
+  }
+  else if(strcmp(first, "EXIT") == 0){
     return PARSE_QUIT;
   }
   else{
