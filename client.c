@@ -28,25 +28,29 @@ int parseString(char* msg_buf, char* send_buf){
   char* first;
   char msg[MSG_SIZE];
   strcpy(msg, msg_buf);
-  
-  first = strtok(msg_buf, " ");
-  if(strcmp(first, "SEND") == 0){
-    char *recipient;
-    recipient = strtok(NULL, " ");
+
+  if(strlen(msg_buf) != 0){
+    first = strtok(msg_buf, " ");
+    if(strcmp(first, "SEND") == 0){
+      char *recipient;
+      recipient = strtok(NULL, " ");
     
-    xmlSend(send_buf, msg+6+strlen(recipient), recipient);
-    return PARSE_OK;
+      xmlSend(send_buf, msg+6+strlen(recipient), recipient);
+      return PARSE_OK;
+    }
+    else if(strcmp(first, "SENDALL") == 0){
+      xmlSendAll(send_buf, msg+8);
+      return PARSE_OK;
+    }
+    else if(strcmp(first, "EXIT") == 0){
+      return PARSE_QUIT;
+    }
+    else{
+      return PARSE_ERROR;
+    }
   }
-  else if(strcmp(first, "SENDALL") == 0){
-    xmlSendAll(send_buf, msg+8);
-    return PARSE_OK;
-  }
-  else if(strcmp(first, "EXIT") == 0){
-    return PARSE_QUIT;
-  }
-  else{
+  else
     return PARSE_ERROR;
-  }
 }
 
 void send_recv(int i, int sockfd)

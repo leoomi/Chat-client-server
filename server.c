@@ -16,7 +16,7 @@
 
 void send_to_all(int sockfd,  char *msg, int msg_len, fd_set *master, int fdmax) {
   int i;
-  
+  printf("sendall: %s\n", msg);
   for(i = 0; i <= fdmax; i++){
     if (FD_ISSET(i, master)){
       if (i != sockfd) {
@@ -25,6 +25,22 @@ void send_to_all(int sockfd,  char *msg, int msg_len, fd_set *master, int fdmax)
 	}
       }
     }
+  }
+}
+
+void send_to(char* sender, char* recipient, char* msg, user *users, int nusers){
+  printf("send: %s, rec: %s, msg: %s\n", sender, recipient, msg);
+  int senderPos = findUser(users, nusers, sender);
+  int senderSock = users[senderPos].sockfd;
+  int recPos = findUser(users, nusers, recipient);
+  int recSock = users[recPos].sockfd;
+  
+  if(recPos < 0){
+    send(senderSock, "recipient not found", 20, 0);
+  }
+  else{
+    send(senderSock, msg, strlen(msg), 0);
+    send(recSock, msg, strlen(msg), 0);
   }
 }
 
@@ -54,7 +70,7 @@ void handleXml(int sockfd, char* recv_buf, char* buffer, fd_set *master, int fdm
       }
     }
     sprintf(buffer, "[%s->%s]: %s", sender, recipient, msg);
-    printf("send messsage: %s\n", buffer);
+    send_to(sender, recipient, buffer, users, nusers);
   }
   else if(strcmp(xmlGetProp(root, "type"), "SENDALL") == 0){
     for(cur_node = root->children; cur_node != NULL; cur_node = cur_node->next){
@@ -89,9 +105,7 @@ void send_recv(int i, fd_set *master, int sockfd, int fdmax, user* users, int nu
     close(i);
     FD_CLR(i, master);
     userpos = findSockfd(users, nusers, i);
-    printf("%d\n", userpos);
     users[userpos].sockfd = -1;
-    printf("%d\n", users[userpos].sockfd);
   }
   else {
     recv_buf[nbytes_recvd] = '\0';
@@ -119,14 +133,17 @@ void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_i
       close(newsockfd);
     }
     else{
+      FD_SET(newsockfd, master);
+      if(newsockfd > *fdmax){
+	*fdmax = newsockfd;
+      }
+      
       printf("new connection from %s:%d, user: %s\n",inet_ntoa(client_addr->sin_addr), ntohs(client_addr->sin_port), name);
 
+      userpos = findUser(users, *nusers, name) ;
+      printf("pos:%d,name:%s,sockfd:%d\n", userpos, users[userpos].name, users[userpos].sockfd);
       //Adds new user to list
-      if(userpos = findUser(users, *nusers, name) < 0){
-	FD_SET(newsockfd, master);
-	if(newsockfd > *fdmax){
-	  *fdmax = newsockfd;
-	}
+      if(userpos < 0){
 	user newUser;
 	newUser.sockfd = newsockfd;
 	strcpy(newUser.name, name);
@@ -145,10 +162,13 @@ void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_i
 	  sprintf(buffer, "User %s is already connected", users[userpos].name);
 	  send(newsockfd, buffer, sizeof(buffer), 0);
 	  */
+	  FD_CLR(newsockfd, master);
 	  close(newsockfd);
 	}
 	else{
+	  printf("pos:%d,name:%s,sockfd:%d\n", userpos, users[userpos].name, users[userpos].sockfd);
 	  users[userpos].sockfd = newsockfd;
+	  printf("pos:%d,name:%s,sockfd:%d\n", userpos, users[userpos].name, users[userpos].sockfd);
 	  sprintf(buffer, "Welcome back, %s!", users[userpos].name);
 	  send(newsockfd, buffer, sizeof(buffer), 0);
 	  printf("User already registered\n");
@@ -186,7 +206,7 @@ void init_connection(int *sockfd, struct sockaddr_in *my_addr, int port)
     perror("listen");
     exit(1);
   }
-  printf("\nTCPServer Waiting for client on port %d\n", port);
+  printf("Listening on port %d\n", port);
   fflush(stdout);
 }
 
