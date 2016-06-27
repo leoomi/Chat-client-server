@@ -14,7 +14,6 @@
 #define PARSE_QUIT 1
 #define PARSE_OK 0
 #define MSG_SIZE 300
-#define NAME_SIZE 15
 
 int parseString(char* msg_buf, char* send_buf){
   char* first;
@@ -73,7 +72,7 @@ int main(int argc, char* argv[])
   struct sockaddr_in server_addr;
   fd_set master;
   fd_set read_fds;
-
+  
   if (argc==4) {
     host = argv[1];
     port = atoi(argv[2]);
@@ -83,6 +82,7 @@ int main(int argc, char* argv[])
     }
     else{
       strcpy(username, argv[3]);
+      printf("%s\n", username);
     }
   }
   else {
@@ -112,7 +112,8 @@ int main(int argc, char* argv[])
     exit(1);
   }
 
-  if(send(sockfd, username, strlen(username), 0) < 0){
+  printf("%s\n", username);
+  if(send(sockfd, username,sizeof(username), 0) < 0){
     perror("name send");
     exit(1);
   }

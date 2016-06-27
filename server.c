@@ -14,8 +14,22 @@
 #define BUFSIZE 1024
 #define MAX_USERS 30
 
+void send_to_all(int sockfd,  char *msg, int msg_len, fd_set *master, int fdmax) {
+  int i;
+  
+  for(i = 0; i <= fdmax; i++){
+    if (FD_ISSET(i, master)){
+      if (i != sockfd) {
+	if (send(i, msg, msg_len, 0) < 0) {
+	  perror("send all");
+	}
+      }
+    }
+  }
+}
+
 //parses xml message
-void parseXml(char* recv_buf, char* buffer){
+void handleXml(int sockfd, char* recv_buf, char* buffer, fd_set *master, int fdmax, user *users, int nusers){
   xmlDoc *doc = NULL;
   xmlNode *root = NULL;
   xmlNode *cur_node = NULL;
@@ -39,23 +53,24 @@ void parseXml(char* recv_buf, char* buffer){
 	msg = xmlNodeGetContent(cur_node);
       }
     }
+    sprintf(buffer, "[%s->%s]: %s", sender, recipient, msg);
+    printf("send messsage: %s\n", buffer);
   }
-
-  sprintf(buffer, "[%s->%s]: %s", sender, recipient, msg);
+  else if(strcmp(xmlGetProp(root, "type"), "SENDALL") == 0){
+    for(cur_node = root->children; cur_node != NULL; cur_node = cur_node->next){
+      if(strcmp(cur_node->name, "from") == 0){
+	sender = xmlNodeGetContent(cur_node);
+      }
+      else if(strcmp(cur_node->name, "msg") == 0){
+	msg = xmlNodeGetContent(cur_node);
+      }
+    }
+    sprintf(buffer, "[%s->ALL]: %s", sender, msg);
+    send_to_all(sockfd, buffer, strlen(buffer), master, fdmax);
+  }
   
   xmlFreeDoc(doc);
   xmlCleanupParser();
-}
-
-void send_to_all(int j, int sockfd, int nbytes_recvd, char *send_buf, fd_set *master)
-{
-  if (FD_ISSET(j, master)){
-    if (j != sockfd) {
-      if (send(j, send_buf, nbytes_recvd, 0) < 0) {
-	perror("send");
-      }
-    }
-  }
 }
 
 void send_recv(int i, fd_set *master, int sockfd, int fdmax, user* users, int nusers)
@@ -74,15 +89,14 @@ void send_recv(int i, fd_set *master, int sockfd, int fdmax, user* users, int nu
     close(i);
     FD_CLR(i, master);
     userpos = findSockfd(users, nusers, i);
+    printf("%d\n", userpos);
     users[userpos].sockfd = -1;
+    printf("%d\n", users[userpos].sockfd);
   }
   else {
     recv_buf[nbytes_recvd] = '\0';
     printf("%s\n", recv_buf);
-    parseXml(recv_buf, send_buf);
-    for(j = 0; j <= fdmax; j++){
-      send_to_all(j, sockfd, nbytes_recvd, send_buf, master);
-    }
+    handleXml(sockfd, recv_buf, send_buf, master, fdmax, users, nusers);
   }	
 }
 
@@ -92,6 +106,7 @@ void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_i
   socklen_t addrlen;
   int newsockfd, len, userpos;
   char name[NAME_SIZE];
+  char buffer[50];
 	
   addrlen = sizeof(struct sockaddr_in);
   if((newsockfd = accept(sockfd, (struct sockaddr *)client_addr, &addrlen)) < 0) {
@@ -104,21 +119,40 @@ void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_i
       close(newsockfd);
     }
     else{
-      FD_SET(newsockfd, master);
-      if(newsockfd > *fdmax){
-	*fdmax = newsockfd;
-      }
       printf("new connection from %s:%d, user: %s\n",inet_ntoa(client_addr->sin_addr), ntohs(client_addr->sin_port), name);
 
+      //Adds new user to list
       if(userpos = findUser(users, *nusers, name) < 0){
+	FD_SET(newsockfd, master);
+	if(newsockfd > *fdmax){
+	  *fdmax = newsockfd;
+	}
 	user newUser;
 	newUser.sockfd = newsockfd;
 	strcpy(newUser.name, name);
 	users[*nusers] = newUser;
-	*nusers++;
+	*nusers = *nusers+1;
+	
+	sprintf(buffer, "Welcome! New user detected and registered: %s", name);
+	printf("New user: %s\n", name);
+	send(newsockfd, buffer, sizeof(buffer), 0);
       }
+      //Sets the socket variable on the user list
       else{
-	users[userpos].sockfd = newsockfd;
+	if(users[userpos].sockfd >= 0){
+	  printf("user already connected\n");
+	  /*
+	  sprintf(buffer, "User %s is already connected", users[userpos].name);
+	  send(newsockfd, buffer, sizeof(buffer), 0);
+	  */
+	  close(newsockfd);
+	}
+	else{
+	  users[userpos].sockfd = newsockfd;
+	  sprintf(buffer, "Welcome back, %s!", users[userpos].name);
+	  send(newsockfd, buffer, sizeof(buffer), 0);
+	  printf("User already registered\n");
+	}
       }
     }
   }
