@@ -15,15 +15,6 @@
 #define PARSE_OK 0
 #define MSG_SIZE 300
 
-void delchar(char *x,int a, int b)
-{
-  if ((a+b-1) <= strlen(x))
-    {
-      strcpy(&x[b-1],&x[a+b-1]);
-      puts(x);
-    }
-}
-
 int parseString(char* msg_buf, char* send_buf){
   char* first;
   char msg[MSG_SIZE];
@@ -40,6 +31,30 @@ int parseString(char* msg_buf, char* send_buf){
     }
     else if(strcmp(first, "SENDALL") == 0){
       xmlSendAll(send_buf, msg+8);
+      return PARSE_OK;
+    }
+    else if(strcmp(first, "WHO") == 0){
+      xmlWho(send_buf);
+      return PARSE_OK;
+    }
+    else if(strcmp(first, "CREATEG") == 0){
+      char *group;
+      group = strtok(NULL, " ");
+    
+      xmlCreateGroup(send_buf, group);
+      return PARSE_OK;
+    }
+    else if(strcmp(first, "JOING") == 0){
+      char *group;
+      group = strtok(NULL, " ");
+      xmlJoinGroup(send_buf, group);
+      return PARSE_OK;
+    }
+    else if(strcmp(first, "SENDG") == 0){
+      char *group;
+      group = strtok(NULL, " ");
+    
+      xmlSend(send_buf, msg+7+strlen(group), group);
       return PARSE_OK;
     }
     else if(strcmp(first, "EXIT") == 0){
@@ -63,7 +78,6 @@ void send_recv(int i, int sockfd)
   if (i == 0){
     in_scan(msg_buf);
     code = parseString(msg_buf, send_buf);
-    //xmlSend(send_buf, msg_buf, "test");
 
     if (code == PARSE_QUIT) {
       exit(0);

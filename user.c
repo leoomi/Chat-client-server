@@ -1,5 +1,6 @@
 #include "user.h"
 #include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 
 int findUser(user* users, int nusers, char *name){
@@ -20,4 +21,25 @@ int findSockfd(user* users, int nusers, int sockfd){
       return i;
   }
   return -1;
+}
+
+char* who(user* users, int nusers){
+  int i;
+  char *output = malloc(1024*sizeof(char));
+  char on[] = "online";
+  char off[] = "offline";
+  output[0] = '\0';
+  strcat(output, "|            user |  status |\n");
+  
+  for(i = 0; i < nusers; i++){
+    char line[50];
+    if(users[i].sockfd < 0){
+      sprintf(line, "| %15s | %7s |\n", users[i].name, off);
+    }
+    else{
+      sprintf(line, "| %15s | %7s |\n", users[i].name, on);
+    }
+    strcat(output, line);
+  }
+  return output;
 }

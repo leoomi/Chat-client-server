@@ -9,7 +9,9 @@ typedef struct user{
 typedef struct group{
   char name[NAME_SIZE];
   user group_users[GROUP_SIZE];
+  int num_users;
 } group;
 
 int findUser(user* users, int nusers, char *name);
 int findSockfd(user* users, int nusers, int sockfd);
+char* who(user* users, int nusers);

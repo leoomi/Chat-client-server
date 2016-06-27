@@ -16,6 +16,7 @@
 
 void send_to_all(int sockfd,  char *msg, int msg_len, fd_set *master, int fdmax) {
   int i;
+
   printf("sendall: %s\n", msg);
   for(i = 0; i <= fdmax; i++){
     if (FD_ISSET(i, master)){
@@ -39,8 +40,24 @@ void send_to(char* sender, char* recipient, char* msg, user *users, int nusers){
     send(senderSock, "recipient not found", 20, 0);
   }
   else{
-    send(senderSock, msg, strlen(msg), 0);
-    send(recSock, msg, strlen(msg), 0);
+    if(send(senderSock, msg, strlen(msg), 0) < 0){
+      perror("send_to sender send:");
+    }
+    if(send(recSock, msg, strlen(msg), 0) < 0){
+      perror("send_to recipient send:");
+    }
+  }
+}
+
+void send_who(char *sender, user *users, int nusers){
+  char *msg = who(users, nusers);
+  int senderPos = findUser(users, nusers, sender);
+  int senderSock = users[senderPos].sockfd;
+
+  printf("who sender:%s, message:\n%s", sender, msg);
+
+  if(send(senderSock, msg, strlen(msg), 0) < 0){
+    perror("who send");
   }
 }
 
@@ -71,6 +88,7 @@ void handleXml(int sockfd, char* recv_buf, char* buffer, fd_set *master, int fdm
     }
     sprintf(buffer, "[%s->%s]: %s", sender, recipient, msg);
     send_to(sender, recipient, buffer, users, nusers);
+    printf("send messsage: %s\n", buffer);
   }
   else if(strcmp(xmlGetProp(root, "type"), "SENDALL") == 0){
     for(cur_node = root->children; cur_node != NULL; cur_node = cur_node->next){
@@ -84,7 +102,16 @@ void handleXml(int sockfd, char* recv_buf, char* buffer, fd_set *master, int fdm
     sprintf(buffer, "[%s->ALL]: %s", sender, msg);
     send_to_all(sockfd, buffer, strlen(buffer), master, fdmax);
   }
-  
+  else if(strcmp(xmlGetProp(root, "type"), "WHO") == 0){
+    for(cur_node = root->children; cur_node != NULL; cur_node = cur_node->next){
+      if(strcmp(cur_node->name, "from") == 0){
+	sender = xmlNodeGetContent(cur_node);
+      }
+    }
+
+    send_who(sender, users, nusers);
+  }
+
   xmlFreeDoc(doc);
   xmlCleanupParser();
 }
