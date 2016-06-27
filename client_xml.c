@@ -21,6 +21,6 @@ void xmlJoinGroup(char* buffer, char* group){
 }
 
 void xmlSendGroup(char* buffer, char* group, char* msg){
-  sprintf(buffer, "<request type=\"JOING\"><from>%s</from><group>%s</group><msg>%s</msg></request>", username, group, msg);
+  sprintf(buffer, "<request type=\"SENDG\"><from>%s</from><group>%s</group><msg>%s</msg></request>", username, group, msg);
 }
 

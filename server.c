@@ -13,6 +13,7 @@
 
 #define BUFSIZE 1024
 #define MAX_USERS 30
+#define MAX_GROUPS 10
 
 void send_to_all(int sockfd,  char *msg, int msg_len, fd_set *master, int fdmax) {
   int i;
@@ -61,12 +62,76 @@ void send_who(char *sender, user *users, int nusers){
   }
 }
 
+void create_group(char *sender, char *gname, group *groups, int *ngroups, user *users, int nusers){
+  int senderPos = findUser(users, nusers, sender);
+  int senderSock = users[senderPos].sockfd;
+  int groupPos = findGroup(groups, *ngroups, gname);
+  char msg[100];
+  
+  if(groupPos < 0){
+    group newGroup;
+    strcpy(newGroup.name, gname);
+    newGroup.users[0] = senderPos;
+    newGroup.nusers =  newGroup.nusers + 1;
+
+    groups[*ngroups] = newGroup;
+    *ngroups = *ngroups + 1;
+    
+    sprintf(msg, "Group %s sucessfully created!", gname);
+    
+    if(send(senderSock, msg, strlen(msg), 0) < 0){
+      perror("create group send");
+    }
+  }
+  else{
+    sprintf(msg, "Name %s already in use.", gname);
+    
+    if(send(senderSock, msg, strlen(msg), 0) < 0){
+      perror("create group error send");
+    }
+  }
+}
+
+void send_group(char *sender, char *msg, char *gname, group *groups, int *ngroups, user *users, int nusers){
+  int senderPos = findUser(users, nusers, sender);
+  int senderSock = users[senderPos].sockfd;
+  int groupPos = findGroup(groups, *ngroups, gname);
+  char buffer[100];
+
+  int i;
+  for(i = 0; i < groups[groupPos].nusers; i++){
+    printf("%d ", groups[groupPos].users[i]);
+  }
+  printf("\n");
+  printf("senderPos: %d,isInGroup: %d\n", senderPos, isInGroup(senderPos, groups[groupPos]));
+  if(groupPos < 0){
+    sprintf(buffer, "Group %s not found.", gname);
+    if(send(senderSock, buffer, strlen(buffer), 0) < 0){
+      perror("send group error");
+    }
+  }
+  else {
+    if(isInGroup(senderPos, groups[groupPos])){
+      sprintf(buffer, "Sending to group %s", gname);
+      if(send(senderSock, buffer, strlen(buffer), 0) < 0){
+	perror("send group error");
+      }
+    }
+    else{
+      sprintf(buffer, "You are not part of group %s", gname);
+      if(send(senderSock, buffer, strlen(buffer), 0) < 0){
+      perror("send group error");
+      }
+    }
+  }
+}
+
 //parses xml message
-void handleXml(int sockfd, char* recv_buf, char* buffer, fd_set *master, int fdmax, user *users, int nusers){
+void handleXml(int sockfd, char* recv_buf, char* buffer, fd_set *master, int fdmax, user *users, int nusers, group *groups, int *ngroups){
   xmlDoc *doc = NULL;
   xmlNode *root = NULL;
   xmlNode *cur_node = NULL;
-  char *sender, *recipient, *msg;
+  char *sender, *recipient, *group,*msg;
 
   doc = xmlParseDoc(recv_buf);
   if (doc == NULL) {
@@ -111,12 +176,40 @@ void handleXml(int sockfd, char* recv_buf, char* buffer, fd_set *master, int fdm
 
     send_who(sender, users, nusers);
   }
+  else if(strcmp(xmlGetProp(root, "type"), "CREATEG") == 0){
+    for(cur_node = root->children; cur_node != NULL; cur_node = cur_node->next){
+      if(strcmp(cur_node->name, "from") == 0){
+	sender = xmlNodeGetContent(cur_node);
+      }
+      else if(strcmp(cur_node->name, "group") == 0){
+	group = xmlNodeGetContent(cur_node);
+      }
+    }
 
+    create_group(sender, group, groups, ngroups, users, nusers);
+  }
+  else if(strcmp(xmlGetProp(root, "type"), "SENDG") == 0){
+    for(cur_node = root->children; cur_node != NULL; cur_node = cur_node->next){
+      if(strcmp(cur_node->name, "from") == 0){
+	sender = xmlNodeGetContent(cur_node);
+      }
+      else if(strcmp(cur_node->name, "group") == 0){
+	group = xmlNodeGetContent(cur_node);
+      }
+      else if(strcmp(cur_node->name, "msg") == 0){
+	msg = xmlNodeGetContent(cur_node);
+      }
+    }
+    sprintf(buffer, "[%s->{%s}]: %s", sender, group, msg);
+    send_group(sender, msg, group, groups, ngroups, users, nusers);
+  }
+
+  
   xmlFreeDoc(doc);
   xmlCleanupParser();
 }
 
-void send_recv(int i, fd_set *master, int sockfd, int fdmax, user* users, int nusers)
+void send_recv(int i, fd_set *master, int sockfd, int fdmax, user* users, int nusers, group* groups, int *ngroups)
 {
   int nbytes_recvd, j, userpos;
   char recv_buf[BUFSIZE];
@@ -137,7 +230,7 @@ void send_recv(int i, fd_set *master, int sockfd, int fdmax, user* users, int nu
   else {
     recv_buf[nbytes_recvd] = '\0';
     printf("%s\n", recv_buf);
-    handleXml(sockfd, recv_buf, send_buf, master, fdmax, users, nusers);
+    handleXml(sockfd, recv_buf, send_buf, master, fdmax, users, nusers, groups, ngroups);
   }	
 }
 
@@ -246,6 +339,9 @@ int main(int argc, char* argv[]) {
   user users[MAX_USERS];
   int nusers = 0;
 
+  group groups[MAX_GROUPS];
+  int ngroups = 0;
+
   if (argc == 2) {
     port = atoi(argv[1]);
   }
@@ -273,7 +369,7 @@ int main(int argc, char* argv[]) {
 	if (i == sockfd)
 	  connection_accept(&master, &fdmax, sockfd, &client_addr, users, &nusers);
 	else
-	  send_recv(i, &master, sockfd, fdmax, users, nusers);
+	  send_recv(i, &master, sockfd, fdmax, users, nusers, groups, &ngroups);
       }
     }
   }

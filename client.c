@@ -54,7 +54,7 @@ int parseString(char* msg_buf, char* send_buf){
       char *group;
       group = strtok(NULL, " ");
     
-      xmlSend(send_buf, msg+7+strlen(group), group);
+      xmlSendGroup(send_buf, group, msg+7+strlen(group));
       return PARSE_OK;
     }
     else if(strcmp(first, "EXIT") == 0){

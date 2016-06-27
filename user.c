@@ -23,6 +23,27 @@ int findSockfd(user* users, int nusers, int sockfd){
   return -1;
 }
 
+int findGroup(group* groups, int ngroups, char *name){
+  int i;
+  
+  for(i = 0; i < ngroups; i++){
+    if(strcmp(groups[i].name, name) == 0)
+      return i;
+  }
+  return -1;
+}
+
+int isInGroup(int userPos, group grp){
+  int i;
+
+  for(i = 0; i < grp.nusers; i++){
+    if(userPos == grp.users[i])
+      return 1;
+  }
+
+  return 0;
+}
+
 char* who(user* users, int nusers){
   int i;
   char *output = malloc(1024*sizeof(char));

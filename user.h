@@ -8,10 +8,12 @@ typedef struct user{
 
 typedef struct group{
   char name[NAME_SIZE];
-  user group_users[GROUP_SIZE];
-  int num_users;
+  int users[GROUP_SIZE];
+  int nusers;
 } group;
 
 int findUser(user* users, int nusers, char *name);
 int findSockfd(user* users, int nusers, int sockfd);
+int findGroup(group* groups, int ngroups, char *name);
+int isInGroup(int userPos, group grp); 
 char* who(user* users, int nusers);
